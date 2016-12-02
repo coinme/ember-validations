@@ -50,6 +50,7 @@ export default EmberObject.extend({
 
   unknownProperty(key) {
     let model = get(this, 'model');
+
     if (model) {
       return get(model, key);
     }
