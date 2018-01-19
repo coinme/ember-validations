@@ -162,7 +162,9 @@ export default Mixin.create(setValidityMixin, {
         call() {
           let errorMessage = this.callback.call(this);
 
-          if (errorMessage) {
+          if (Ember.isArray(errorMessage)) {
+            this.errors.pushObjects(errorMessage);
+          } else if (errorMessage) {
             this.errors.pushObject(errorMessage);
           }
         },
