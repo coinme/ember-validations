@@ -7,19 +7,20 @@ const {
   A: emberArray,
   ArrayProxy,
   Mixin,
-  RSVP: { all, reject },
+  RSVP: {all, reject},
   computed,
-  computed: { alias, not },
+  computed: {alias, not},
   get,
   isArray,
   isNone,
   isPresent,
   set,
-  warn
+  warn,
+  getOwner,
 } = Ember;
 
 const setValidityMixin = Mixin.create({
-  isValid: computed('validators.@each.isValid', function() {
+  isValid: computed('validators.@each.isValid', function () {
     let compactValidators = get(this, 'validators').compact();
     let filteredValidators = compactValidators.filter((validator) => !get(validator, 'isValid'));
 
@@ -29,20 +30,20 @@ const setValidityMixin = Mixin.create({
   isInvalid: not('isValid')
 });
 
-const pushValidatableObject = function(model, property) {
+const pushValidatableObject = function (model, property) {
   let content = get(model, property);
 
   model.removeObserver(property, pushValidatableObject);
 
   if (isArray(content)) {
-    model.validators.pushObject(ArrayValidatorProxy.create({ model, property, contentBinding: `model.${property}` }));
+    model.validators.pushObject(ArrayValidatorProxy.create({model, property, contentBinding: `model.${property}`}));
   } else {
     model.validators.pushObject(content);
   }
 };
 
-const lookupValidator = function(validatorName) {
-  let owner = Ember.getOwner(this);
+const lookupValidator = function (validatorName) {
+  let owner = getOwner(this);
   let service = owner.lookup('service:validations');
   let validators = [];
   let cache;
@@ -56,23 +57,16 @@ const lookupValidator = function(validatorName) {
   if (cache[validatorName]) {
     validators = validators.concat(cache[validatorName]);
   } else {
-    let local = owner.resolveRegistration(`validator:local/${validatorName}`);
-    let remote = owner.resolveRegistration(`validator:remote/${validatorName}`);
+    let base = owner.resolveRegistration(`ember-validations@validator:${validatorName}`);
 
-    if (local || remote) {
-      validators = validators.concat([local, remote]);
+    if (base) {
+      validators = validators.concat([base]);
     } else {
-      let base = owner.resolveRegistration(`validator:${validatorName}`);
+      let local = owner.resolveRegistration(`ember-validations@validator:local/${validatorName}`);
+      let remote = owner.resolveRegistration(`ember-validations@validator:remote/${validatorName}`);
 
-      if (base) {
-        validators = validators.concat([base]);
-      } else {
-        local = owner.resolveRegistration(`ember-validations@validator:local/${validatorName}`);
-        remote = owner.resolveRegistration(`ember-validations@validator:remote/${validatorName}`);
-
-        if (local || remote) {
-          validators = validators.concat([local, remote]);
-        }
+      if (local || remote) {
+        validators = validators.concat([base, local, remote]);
       }
     }
 
@@ -118,7 +112,7 @@ export default Mixin.create(setValidityMixin, {
     this.buildValidators();
 
     this.validators.forEach((validator) => {
-      validator.addObserver('errors.[]', this, function(sender) {
+      validator.addObserver('errors.[]', this, function (sender) {
         let errors = emberArray();
 
         this.validators.forEach((validator) => {
@@ -149,12 +143,16 @@ export default Mixin.create(setValidityMixin, {
   buildRuleValidator(property) {
     let pushValidator = (validator, validatorName) => {
       if (validator) {
-        this.validators.pushObject(validator.create({ model: this, property, options: this.validations[property][validatorName] }));
+        this.validators.pushObject(validator.create({
+          model: this,
+          property,
+          options: this.validations[property][validatorName]
+        }));
       }
     };
 
     if (this.validations[property].callback) {
-      this.validations[property] = { inline: this.validations[property] };
+      this.validations[property] = {inline: this.validations[property]};
     }
 
     let createInlineClass = (callback) => {
